@@ -14,6 +14,7 @@ import driverRoutes from "./routes/drivers.js";
 import adminRoutes from "./routes/admin.js";
 
 const app = express();
+app.set('trust proxy', 1);
 const httpServer = http.createServer(app);
 
 // ── Global middleware ─────────────────────────────────────────────────────────
