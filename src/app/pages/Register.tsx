@@ -1,47 +1,62 @@
 import React, { useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { useAuth } from '../context/AuthContext';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Loader2 } from 'lucide-react';
 
 export default function Register() {
   const { userType } = useParams<{ userType: 'driver' | 'passenger' }>();
   const navigate = useNavigate();
   const { register } = useAuth();
-  const [formData, setFormData] = useState({
-    fullName: '',
-    username: '',
-    dob: '',
-    idNumber: '',
-    email: '',
-    phoneNumber: '',
-    password: '',
+
+  const [form, setForm] = useState({
+    fullName:        '',
+    username:        '',
+    dob:             '',
+    idNumber:        '',
+    email:           '',
+    phone:           '',
+    password:        '',
     confirmPassword: '',
   });
-  const [error, setError] = useState('');
+  const [error,   setError]   = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-  };
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) =>
+    setForm({ ...form, [e.target.name]: e.target.value });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
-    if (formData.password !== formData.confirmPassword) {
+    if (form.password !== form.confirmPassword) {
       setError('Passwords do not match');
       return;
     }
-
+    if (form.password.length < 8) {
+      setError('Password must be at least 8 characters');
+      return;
+    }
     if (!userType) return;
 
-    const { confirmPassword, ...userData } = formData;
-    const success = register({ ...userData, userType });
+    setLoading(true);
+    const result = await register({
+      fullName: form.fullName,
+      username: form.username,
+      email:    form.email,
+      phone:    form.phone,
+      password: form.password,
+      dob:      form.dob,
+      idNumber: form.idNumber,
+      role:     userType.toUpperCase() as 'DRIVER' | 'PASSENGER',
+    });
+    setLoading(false);
 
-    if (success) {
-      navigate(userType === 'driver' ? '/driver/dashboard' : '/passenger/dashboard');
-    } else {
-      setError('Username or email already exists');
+    if (!result.success) {
+      setError(result.error ?? 'Registration failed');
+      return;
     }
+
+    navigate(userType === 'driver' ? '/driver/dashboard' : '/passenger/dashboard');
   };
 
   return (
@@ -62,113 +77,41 @@ export default function Register() {
           </div>
 
           {error && (
-            <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-xl text-sm">
-              {error}
-            </div>
+            <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-xl text-sm">{error}</div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm mb-2 text-gray-700">Full Name</label>
-              <input
-                type="text"
-                name="fullName"
-                value={formData.fullName}
-                onChange={handleChange}
-                className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm mb-2 text-gray-700">Username</label>
-              <input
-                type="text"
-                name="username"
-                value={formData.username}
-                onChange={handleChange}
-                className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm mb-2 text-gray-700">Date of Birth</label>
-              <input
-                type="date"
-                name="dob"
-                value={formData.dob}
-                onChange={handleChange}
-                className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm mb-2 text-gray-700">ID Number</label>
-              <input
-                type="text"
-                name="idNumber"
-                value={formData.idNumber}
-                onChange={handleChange}
-                className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm mb-2 text-gray-700">Email</label>
-              <input
-                type="email"
-                name="email"
-                value={formData.email}
-                onChange={handleChange}
-                className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm mb-2 text-gray-700">Phone Number</label>
-              <input
-                type="tel"
-                name="phoneNumber"
-                value={formData.phoneNumber}
-                onChange={handleChange}
-                className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm mb-2 text-gray-700">Password</label>
-              <input
-                type="password"
-                name="password"
-                value={formData.password}
-                onChange={handleChange}
-                className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm mb-2 text-gray-700">Confirm Password</label>
-              <input
-                type="password"
-                name="confirmPassword"
-                value={formData.confirmPassword}
-                onChange={handleChange}
-                className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                required
-              />
-            </div>
+            {[
+              { label: 'Full Name',     name: 'fullName',  type: 'text',     placeholder: 'e.g. Thabo Mokoena'    },
+              { label: 'Username',      name: 'username',  type: 'text',     placeholder: 'e.g. thabo_m'          },
+              { label: 'Date of Birth', name: 'dob',       type: 'date',     placeholder: ''                      },
+              { label: 'ID Number',     name: 'idNumber',  type: 'text',     placeholder: 'National ID number'    },
+              { label: 'Email',         name: 'email',     type: 'email',    placeholder: 'your@email.com'        },
+              { label: 'Phone Number',  name: 'phone',     type: 'tel',      placeholder: '+266 5800 0001'        },
+              { label: 'Password',      name: 'password',  type: 'password', placeholder: 'At least 8 characters' },
+              { label: 'Confirm Password', name: 'confirmPassword', type: 'password', placeholder: 'Repeat password' },
+            ].map(({ label, name, type, placeholder }) => (
+              <div key={name}>
+                <label className="block text-sm mb-2 text-gray-700">{label}</label>
+                <input
+                  type={type}
+                  name={name}
+                  value={(form as any)[name]}
+                  onChange={handleChange}
+                  placeholder={placeholder}
+                  className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+            ))}
 
             <button
               type="submit"
-              className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white py-3 rounded-xl hover:opacity-90 transition-opacity"
+              disabled={loading}
+              className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white py-3 rounded-xl hover:opacity-90 transition-opacity flex items-center justify-center gap-2 disabled:opacity-60"
             >
-              Register
+              {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+              {loading ? 'Registering…' : 'Register'}
             </button>
           </form>
         </div>
