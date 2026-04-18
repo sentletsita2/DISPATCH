@@ -8,7 +8,6 @@ import { getIO } from "../socket/io.js";
 const router = Router();
 
 // ── POST /trips/estimate ──────────────────────────────────────────────────────
-// Get a price estimate before booking
 
 router.post("/estimate", authenticate, async (req: AuthRequest, res: Response) => {
   const { pickupLat, pickupLng, dropoffLat, dropoffLng, durationMin } = req.body;
@@ -17,13 +16,12 @@ router.post("/estimate", authenticate, async (req: AuthRequest, res: Response) =
     return;
   }
   const distanceKm = haversineKm(pickupLat, pickupLng, dropoffLat, dropoffLng);
-  const duration = durationMin ?? distanceKm * 3; // fallback estimate
+  const duration = durationMin ?? distanceKm * 3;
   const price = calculateTripPrice(distanceKm, duration);
   res.json({ distanceKm: Math.round(distanceKm * 10) / 10, durationMin: Math.round(duration), ...price });
 });
 
 // ── POST /trips ───────────────────────────────────────────────────────────────
-// Passenger requests a ride
 
 const createTripSchema = z.object({
   pickupAddress: z.string(),
@@ -49,12 +47,10 @@ router.post("/", authenticate, async (req: AuthRequest, res: Response) => {
   }
 
   const { pickupAddress, pickupLat, pickupLng, dropoffAddress, dropoffLat, dropoffLng, seats, durationMin } = parsed.data;
-
   const distanceKm = haversineKm(pickupLat, pickupLng, dropoffLat, dropoffLng);
   const duration = durationMin ?? distanceKm * 3;
   const price = calculateTripPrice(distanceKm, duration);
 
-  // Check wallet balance
   const wallet = await prisma.wallet.findUnique({ where: { userId: req.user!.id } });
   if (!wallet || Number(wallet.balance) < price.totalPrice) {
     res.status(400).json({
@@ -83,14 +79,11 @@ router.post("/", authenticate, async (req: AuthRequest, res: Response) => {
     },
   });
 
-  // Broadcast to nearby clocked-in drivers via Socket.IO
   getIO().emit("new:trip", trip);
-
   res.status(201).json(trip);
 });
 
 // ── GET /trips/available ──────────────────────────────────────────────────────
-// Driver: see open trips near their location
 
 router.get("/available", authenticate, async (req: AuthRequest, res: Response) => {
   if (req.user!.role !== "DRIVER") {
@@ -123,7 +116,6 @@ router.post("/:id/accept", authenticate, async (req: AuthRequest, res: Response)
     return;
   }
 
-  // Check driver is verified and clocked in
   const driverProfile = await prisma.driverProfile.findUnique({ where: { userId: req.user!.id } });
   if (!driverProfile?.isVerified) {
     res.status(403).json({ error: "Account not verified by admin" });
@@ -143,9 +135,7 @@ router.post("/:id/accept", authenticate, async (req: AuthRequest, res: Response)
     },
   });
 
-  // Notify passenger
   getIO().to(`user:${trip.passengerId}`).emit("trip:updated", updated);
-
   res.json(updated);
 });
 
@@ -197,7 +187,6 @@ router.post("/:id/complete", authenticate, async (req: AuthRequest, res: Respons
   const totalPrice = Number(trip.totalPrice);
   const driverEarning = Number(trip.driverEarning);
 
-  // Deduct from passenger, pay driver — all in one transaction
   await prisma.$transaction([
     prisma.trip.update({
       where: { id: trip.id },
@@ -266,15 +255,9 @@ router.post("/:id/cancel", authenticate, async (req: AuthRequest, res: Response)
     return;
   }
 
-  const { reason } = req.body;
-  let chargePassenger = false;
+  const reason = typeof req.body.reason === "string" ? req.body.reason : undefined;
 
-  // If trip IN_PROGRESS and driver cancels — charge for distance so far (partial)
-  if (trip.status === "IN_PROGRESS" && isDriver) {
-    chargePassenger = true;
-  }
-
-  const ops: Parameters<typeof prisma.$transaction>[0] = [
+  const cancelOps: Parameters<typeof prisma.$transaction>[0] = [
     prisma.trip.update({
       where: { id: trip.id },
       data: {
@@ -287,10 +270,10 @@ router.post("/:id/cancel", authenticate, async (req: AuthRequest, res: Response)
   ];
 
   // Partial charge if driver cancels mid-trip
-  if (chargePassenger && trip.driverId) {
+  if (trip.status === "IN_PROGRESS" && isDriver && trip.driverId) {
     const partial = Math.round(Number(trip.totalPrice) * 0.5 * 100) / 100;
     const driverPartial = Math.round(partial * 0.8 * 100) / 100;
-    ops.push(
+    cancelOps.push(
       prisma.wallet.update({
         where: { userId: trip.passengerId },
         data: {
@@ -308,7 +291,7 @@ router.post("/:id/cancel", authenticate, async (req: AuthRequest, res: Response)
     );
   }
 
-  await prisma.$transaction(ops as Parameters<typeof prisma.$transaction>[0]);
+  await prisma.$transaction(cancelOps);
 
   const notifyId = isPassenger ? trip.driverId : trip.passengerId;
   if (notifyId) {
@@ -345,7 +328,6 @@ router.post("/:id/rate", authenticate, async (req: AuthRequest, res: Response) =
     data: { tripId: trip.id, giverId: req.user!.id, receiverId, score, review },
   });
 
-  // Recalculate receiver average rating
   const agg = await prisma.rating.aggregate({
     where: { receiverId },
     _avg: { score: true },
@@ -354,16 +336,13 @@ router.post("/:id/rate", authenticate, async (req: AuthRequest, res: Response) =
 
   await prisma.user.update({
     where: { id: receiverId },
-    data: {
-      rating: agg._avg.score ?? 5.0,
-      reviewCount: agg._count,
-    },
+    data: { rating: agg._avg.score ?? 5.0, reviewCount: agg._count },
   });
 
   res.json({ message: "Rating submitted" });
 });
 
-// ── GET /trips (trip history) ─────────────────────────────────────────────────
+// ── GET /trips ────────────────────────────────────────────────────────────────
 
 router.get("/", authenticate, async (req: AuthRequest, res: Response) => {
   const uid = req.user!.id;
