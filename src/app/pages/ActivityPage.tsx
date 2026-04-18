@@ -1,134 +1,142 @@
-import React, { useState } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router';
 import { useAuth } from '../context/AuthContext';
-import { getStoredTrips } from '../utils/mockData';
-import { ArrowLeft, MapPin, DollarSign } from 'lucide-react';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@radix-ui/react-tabs';
+import { apiFetch } from '../utils/api';
+import { ArrowLeft, MapPin, DollarSign, Loader2 } from 'lucide-react';
+
+interface Trip {
+  id: string;
+  status: string;
+  pickupAddress: string;
+  dropoffAddress: string;
+  totalPrice?: string | number;
+  distanceKm?: number;
+  createdAt: string;
+  passenger?: { fullName: string };
+  driver?:    { fullName: string };
+}
+
+interface WalletTx {
+  id: string;
+  type: string;
+  amount: string | number;
+  description?: string;
+  createdAt: string;
+}
 
 export default function ActivityPage() {
-  const { userType } = useParams<{ userType: 'driver' | 'passenger' }>();
   const navigate = useNavigate();
-  const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState('trips');
+  const { user, token } = useAuth();
+  const [activeTab,    setActiveTab]    = useState<'trips' | 'payments'>('trips');
+  const [trips,        setTrips]        = useState<Trip[]>([]);
+  const [transactions, setTransactions] = useState<WalletTx[]>([]);
+  const [loading,      setLoading]      = useState(true);
 
-  if (!user) return null;
+  const isDriver = user?.role === 'DRIVER';
+  const backPath = isDriver ? '/driver/dashboard' : '/passenger/dashboard';
 
-  const trips = getStoredTrips(user.id, userType || 'passenger');
+  useEffect(() => {
+    if (!token) return;
+    Promise.all([
+      apiFetch<Trip[]>('/trips', token),
+      apiFetch<WalletTx[]>('/wallet/transactions', token),
+    ]).then(([tripRes, txRes]) => {
+      if (tripRes.data) setTrips(tripRes.data);
+      if (txRes.data)   setTransactions(txRes.data);
+      setLoading(false);
+    });
+  }, [token]);
+
+  const statusColor = (s: string) => {
+    if (s === 'COMPLETED') return 'bg-green-100 text-green-700';
+    if (s === 'CANCELLED') return 'bg-red-100 text-red-700';
+    return 'bg-blue-100 text-blue-700';
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-500 to-purple-600 p-4">
       <div className="max-w-md mx-auto">
-        <button
-          onClick={() => navigate(`/${userType}/dashboard`)}
-          className="mb-6 text-white flex items-center gap-2 hover:opacity-80"
-        >
-          <ArrowLeft className="w-5 h-5" />
-          Back to Dashboard
+        <button onClick={() => navigate(backPath)} className="mb-6 text-white flex items-center gap-2 hover:opacity-80">
+          <ArrowLeft className="w-5 h-5" /> Back to Dashboard
         </button>
 
         <div className="bg-white rounded-3xl p-6">
           <h2 className="text-2xl mb-6">Activity</h2>
 
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="flex gap-2 mb-6 bg-gray-100 p-1 rounded-xl">
-              <TabsTrigger
-                value="trips"
-                className={`flex-1 py-2 px-4 rounded-lg transition-colors ${
-                  activeTab === 'trips' ? 'bg-white shadow-sm' : 'hover:bg-white/50'
-                }`}
-              >
-                Trip Logs
-              </TabsTrigger>
-              <TabsTrigger
-                value="payments"
-                className={`flex-1 py-2 px-4 rounded-lg transition-colors ${
-                  activeTab === 'payments' ? 'bg-white shadow-sm' : 'hover:bg-white/50'
-                }`}
-              >
-                Payment Logs
-              </TabsTrigger>
-            </TabsList>
+          {/* Tabs */}
+          <div className="flex gap-2 mb-6 bg-gray-100 p-1 rounded-xl">
+            {(['trips', 'payments'] as const).map(tab => (
+              <button key={tab} onClick={() => setActiveTab(tab)}
+                className={`flex-1 py-2 px-4 rounded-lg transition-colors capitalize ${
+                  activeTab === tab ? 'bg-white shadow-sm' : 'hover:bg-white/50'
+                }`}>
+                {tab === 'trips' ? 'Trip Logs' : 'Payment Logs'}
+              </button>
+            ))}
+          </div>
 
-            <TabsContent value="trips">
-              {trips.length === 0 ? (
-                <div className="text-center py-12 text-gray-500">
-                  <MapPin className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                  <p>No trips yet</p>
-                </div>
-              ) : (
-                <div className="space-y-3 max-h-[60vh] overflow-y-auto">
-                  {trips.map((trip) => (
-                    <div key={trip.id} className="bg-gray-50 rounded-xl p-4">
-                      <div className="flex justify-between items-start mb-2">
-                        <div>
-                          <p className="text-sm">
-                            {userType === 'driver' ? trip.passengerName : trip.driverName}
-                          </p>
-                          <p className="text-xs text-gray-600">{trip.date}</p>
-                        </div>
-                        <span
-                          className={`text-xs px-2 py-1 rounded-full ${
-                            trip.status === 'completed'
-                              ? 'bg-green-100 text-green-700'
-                              : trip.status === 'cancelled'
-                              ? 'bg-red-100 text-red-700'
-                              : 'bg-blue-100 text-blue-700'
-                          }`}
-                        >
-                          {trip.status}
-                        </span>
-                      </div>
-                      <div className="text-xs text-gray-600 mb-2">
-                        <p className="flex items-center gap-1">
-                          <MapPin className="w-3 h-3" />
-                          {trip.pickupLocation} → {trip.dropoffLocation}
+          {loading ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
+            </div>
+          ) : activeTab === 'trips' ? (
+            trips.length === 0 ? (
+              <div className="text-center py-12 text-gray-500">
+                <MapPin className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                <p>No trips yet</p>
+              </div>
+            ) : (
+              <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+                {trips.map(trip => (
+                  <div key={trip.id} className="bg-gray-50 rounded-xl p-4">
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <p className="text-sm font-medium">
+                          {isDriver ? trip.passenger?.fullName : trip.driver?.fullName ?? 'Unassigned'}
                         </p>
+                        <p className="text-xs text-gray-500">{new Date(trip.createdAt).toLocaleDateString()}</p>
                       </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-gray-600">{trip.distance} km</span>
-                        <span className="text-sm">${trip.price.toFixed(2)}</span>
-                      </div>
-                      {trip.rating && (
-                        <div className="mt-2 pt-2 border-t border-gray-200 text-xs text-gray-600">
-                          Rating: {'⭐'.repeat(trip.rating)}
-                        </div>
-                      )}
+                      <span className={`text-xs px-2 py-1 rounded-full ${statusColor(trip.status)}`}>
+                        {trip.status}
+                      </span>
                     </div>
-                  ))}
-                </div>
-              )}
-            </TabsContent>
-
-            <TabsContent value="payments">
-              {trips.length === 0 ? (
-                <div className="text-center py-12 text-gray-500">
-                  <DollarSign className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                  <p>No payment history</p>
-                </div>
-              ) : (
-                <div className="space-y-3 max-h-[60vh] overflow-y-auto">
-                  {trips
-                    .filter((trip) => trip.status === 'completed')
-                    .map((trip) => (
-                      <div key={trip.id} className="bg-gray-50 rounded-xl p-4">
-                        <div className="flex justify-between items-center">
-                          <div>
-                            <p className="text-sm">{trip.date}</p>
-                            <p className="text-xs text-gray-600">
-                              {userType === 'driver' ? 'Earned from' : 'Paid to'}{' '}
-                              {userType === 'driver' ? trip.passengerName : trip.driverName}
-                            </p>
-                          </div>
-                          <p className={`text-lg ${userType === 'driver' ? 'text-green-600' : 'text-red-600'}`}>
-                            {userType === 'driver' ? '+' : '-'}${trip.price.toFixed(2)}
-                          </p>
-                        </div>
+                    <p className="text-xs text-gray-600 flex items-center gap-1 mb-2">
+                      <MapPin className="w-3 h-3" />
+                      {trip.pickupAddress} → {trip.dropoffAddress}
+                    </p>
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-gray-500">{trip.distanceKm?.toFixed(1) ?? '—'} km</span>
+                      <span>M {Number(trip.totalPrice ?? 0).toFixed(2)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )
+          ) : (
+            transactions.length === 0 ? (
+              <div className="text-center py-12 text-gray-500">
+                <DollarSign className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                <p>No payment history</p>
+              </div>
+            ) : (
+              <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+                {transactions.map(tx => {
+                  const isCredit = tx.type === 'DEPOSIT' || tx.type === 'TRIP_EARNING';
+                  return (
+                    <div key={tx.id} className="bg-gray-50 rounded-xl p-4 flex items-center justify-between">
+                      <div>
+                        <p className="text-sm">{new Date(tx.createdAt).toLocaleDateString()}</p>
+                        <p className="text-xs text-gray-600">{tx.description ?? tx.type.replace(/_/g, ' ')}</p>
                       </div>
-                    ))}
-                </div>
-              )}
-            </TabsContent>
-          </Tabs>
+                      <p className={`text-lg font-semibold ${isCredit ? 'text-green-600' : 'text-red-600'}`}>
+                        {isCredit ? '+' : '-'}M {Number(tx.amount).toFixed(2)}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            )
+          )}
         </div>
       </div>
     </div>
