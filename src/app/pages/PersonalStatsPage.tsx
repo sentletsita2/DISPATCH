@@ -2,7 +2,7 @@ import React from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { useAuth } from '../context/AuthContext';
 import { getStoredTrips } from '../utils/mockData';
-import { ArrowLeft, DollarSign, MapPin, Users, Navigation } from 'lucide-react';
+import { ArrowLeft, DollarSign, MapPin, Users, Navigation, Star } from 'lucide-react';
 
 export default function PersonalStatsPage() {
   const { userType } = useParams<{ userType: 'driver' | 'passenger' }>();
@@ -65,11 +65,43 @@ export default function PersonalStatsPage() {
           </div>
 
           {userType === 'driver' && (
-            <div className="mt-6 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl p-6 text-white">
-              <h3 className="text-lg mb-2">Reviews</h3>
-              <div className="flex items-center gap-2">
-                <span className="text-3xl">⭐ {user.rating.toFixed(1)}</span>
-                <span className="text-sm opacity-90">Average Rating</span>
+            <div className="mt-6 space-y-4">
+              <div className="bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl p-6 text-white">
+                <h3 className="text-lg mb-2">Overall Rating</h3>
+                <div className="flex items-center gap-2">
+                  <span className="text-3xl">⭐ {user.rating.toFixed(1)}</span>
+                  <span className="text-sm opacity-90">Average Rating</span>
+                </div>
+              </div>
+
+              {/* Full reviews list */}
+              <div className="bg-gray-50 rounded-2xl p-5">
+                <h3 className="font-medium text-gray-700 mb-3">Reviews from Passengers</h3>
+                {(() => {
+                  const allTrips = getStoredTrips(user.id, 'driver');
+                  const reviewed = allTrips.filter(t => t.rating && t.review);
+                  if (reviewed.length === 0) {
+                    return <p className="text-sm text-gray-400 text-center py-4">No reviews yet</p>;
+                  }
+                  return (
+                    <div className="space-y-3">
+                      {reviewed.map((t, i) => (
+                        <div key={i} className="bg-white rounded-xl p-4">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-sm font-medium text-gray-700">{t.passengerName}</span>
+                            <span className="text-xs text-gray-400">{t.date}</span>
+                          </div>
+                          <div className="flex gap-0.5 mb-1">
+                            {[1,2,3,4,5].map(s => (
+                              <Star key={s} className={`w-4 h-4 ${s <= (t.rating || 0) ? 'fill-yellow-400 text-yellow-400' : 'text-gray-200'}`} />
+                            ))}
+                          </div>
+                          {t.review && <p className="text-sm text-gray-600 italic">"{t.review}"</p>}
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           )}
