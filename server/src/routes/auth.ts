@@ -247,7 +247,11 @@ router.post("/forgot-password", async (req: Request, res: Response) => {
   });
 
   sendOtpEmail(email, otp, user.fullName).catch(console.error);
-  res.json({ message: "If that email exists, an OTP has been sent." });
+  // DEV MODE: return OTP in response so it can be used without a real email server
+  res.json({
+    message: "If that email exists, an OTP has been sent.",
+    devOtp: process.env.NODE_ENV !== "production" ? otp : undefined,
+  });
 });
 
 // ── POST /auth/reset-password ─────────────────────────────────────────────────
