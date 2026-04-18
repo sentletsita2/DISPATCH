@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router';
-import { Car, User, Info } from 'lucide-react';
+import { Car, User, Info, Shield } from 'lucide-react';
 
 export default function UserSelection() {
   const navigate = useNavigate();
@@ -49,6 +49,15 @@ export default function UserSelection() {
           </div>
         </div>
       </div>
+
+      {/* Admin Link */}
+      <button
+        onClick={() => navigate('/admin/login')}
+        className="mt-4 flex items-center gap-2 text-white/50 hover:text-white/80 text-xs transition-colors"
+      >
+        <Shield className="w-3 h-3" />
+        Admin Portal
+      </button>
     </div>
   );
 }
