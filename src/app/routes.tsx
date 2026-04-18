@@ -14,6 +14,8 @@ import TripPage from './pages/TripPage';
 import SelectDriver from './pages/SelectDriver';
 import SelectPassenger from './pages/SelectPassenger';
 import ActiveTrip from './pages/ActiveTrip';
+import AdminLogin from './pages/AdminLogin';
+import AdminDashboard from './pages/AdminDashboard';
 import NotFound from './pages/NotFound';
 
 export const router = createBrowserRouter([
@@ -96,6 +98,14 @@ export const router = createBrowserRouter([
   {
     path: '/driver/active-trip',
     element: <ActiveTrip />,
+  },
+  {
+    path: '/admin/login',
+    element: <AdminLogin />,
+  },
+  {
+    path: '/admin/dashboard',
+    element: <AdminDashboard />,
   },
   {
     path: '*',
