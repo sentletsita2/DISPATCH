@@ -1,7 +1,7 @@
 import { Router, Response } from "express";
 import { prisma } from "../lib/prisma.js";
 import { authenticate, AuthRequest } from "../middleware/auth.js";
-import { uploadAvatar } from "../lib/cloudinary.js";
+import { uploadAvatar, toDataUrl } from "../lib/cloudinary.js";
 
 const router = Router();
 
@@ -42,7 +42,7 @@ router.post(
       res.status(400).json({ error: "No file uploaded" });
       return;
     }
-    const avatarUrl = (req.file as Express.Multer.File & { path: string }).path;
+    const avatarUrl = toDataUrl(req.file as Express.Multer.File);
     await prisma.user.update({
       where: { id: req.user!.id },
       data: { avatarUrl },
