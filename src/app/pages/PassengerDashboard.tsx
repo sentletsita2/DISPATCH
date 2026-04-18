@@ -1,23 +1,20 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { useAuth } from '../context/AuthContext';
 import { Wallet, Activity, BarChart3, Car, LogOut, User } from 'lucide-react';
 
 export default function PassengerDashboard() {
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { user, logout, refreshUser } = useAuth();
 
-  if (!user) {
-    navigate('/');
-    return null;
-  }
+  useEffect(() => { refreshUser(); }, []);
 
-  const handleLogout = () => {
-    logout();
-    navigate('/');
-  };
+  if (!user) { navigate('/'); return null; }
 
-  const canRequestRide = user.dispatchCash > 0;
+  const balance    = Number(user.wallet?.balance ?? 0);
+  const canRequest = balance > 0;
+
+  const handleLogout = () => { logout(); navigate('/'); };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-500 to-purple-600 p-4">
@@ -29,18 +26,15 @@ export default function PassengerDashboard() {
             className="flex items-center gap-3 bg-white/20 backdrop-blur-sm rounded-full p-2 pr-4 hover:bg-white/30 transition-colors"
           >
             <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center overflow-hidden">
-              {user.profilePicture ? (
-                <img src={user.profilePicture} alt={user.fullName} className="w-full h-full object-cover" />
-              ) : (
-                <User className="w-6 h-6 text-gray-600" />
-              )}
+              {user.avatarUrl
+                ? <img src={user.avatarUrl} alt={user.fullName} className="w-full h-full object-cover" />
+                : <User className="w-6 h-6 text-gray-600" />}
             </div>
             <div className="text-left">
               <p className="text-white text-sm">{user.fullName}</p>
               <p className="text-white/80 text-xs">⭐ {user.rating.toFixed(1)}</p>
             </div>
           </button>
-
           <button
             onClick={handleLogout}
             className="bg-white/20 backdrop-blur-sm rounded-full p-3 hover:bg-white/30 transition-colors"
@@ -49,10 +43,11 @@ export default function PassengerDashboard() {
           </button>
         </div>
 
-        {/* Dispatch Cash Balance */}
+        {/* Balance */}
         <div className="bg-white/20 backdrop-blur-sm rounded-3xl p-6 mb-6 text-center">
           <p className="text-white/80 text-sm mb-1">Dispatch Cash Balance</p>
-          <p className="text-white text-4xl">${user.dispatchCash.toFixed(2)}</p>
+          <p className="text-white text-4xl">M {balance.toFixed(2)}</p>
+          <p className="text-white/60 text-xs mt-1">{user.userId}</p>
         </div>
 
         {/* Action Cards */}
@@ -88,22 +83,22 @@ export default function PassengerDashboard() {
           </button>
 
           <button
-            onClick={() => canRequestRide ? navigate('/passenger/trip') : null}
-            disabled={!canRequestRide}
+            onClick={() => canRequest ? navigate('/passenger/trip') : undefined}
+            disabled={!canRequest}
             className={`rounded-2xl p-6 transition-all flex flex-col items-center gap-3 ${
-              canRequestRide
+              canRequest
                 ? 'bg-gradient-to-br from-orange-400 to-red-500 hover:shadow-xl'
                 : 'bg-gray-300 cursor-not-allowed'
             }`}
           >
-            <div className={`p-4 rounded-2xl ${canRequestRide ? 'bg-white/30' : 'bg-white/50'}`}>
+            <div className={`p-4 rounded-2xl ${canRequest ? 'bg-white/30' : 'bg-white/50'}`}>
               <Car className="w-8 h-8 text-white" />
             </div>
             <span className="text-white">Request Ride</span>
           </button>
         </div>
 
-        {!canRequestRide && (
+        {!canRequest && (
           <div className="bg-yellow-100 border border-yellow-300 rounded-2xl p-4 text-center">
             <p className="text-yellow-800 text-sm">
               Please add funds to your Dispatch Cash to request a ride
@@ -111,7 +106,6 @@ export default function PassengerDashboard() {
           </div>
         )}
 
-        {/* App Name Footer */}
         <div className="text-center mt-8">
           <h1 className="text-white text-3xl">Dispatch</h1>
         </div>
