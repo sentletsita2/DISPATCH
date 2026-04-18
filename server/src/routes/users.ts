@@ -1,7 +1,7 @@
 import { Router, Response } from "express";
 import { prisma } from "../lib/prisma.js";
 import { authenticate, AuthRequest } from "../middleware/auth.js";
-import { uploadAvatar, toDataUrl } from "../lib/cloudinary.js";
+import { uploadAvatar, toDataUrl } from "../lib/upload.js";
 
 const router = Router();
 
