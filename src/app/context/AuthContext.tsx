@@ -8,7 +8,7 @@ export interface User {
   phoneNumber: string;
   dob: string;
   idNumber: string;
-  userType: 'driver' | 'passenger';
+  userType: 'driver' | 'passenger' | 'admin';
   profilePicture?: string;
   rating: number;
   dispatchCash: number;
@@ -18,7 +18,7 @@ export interface User {
 
 interface AuthContextType {
   user: User | null;
-  login: (username: string, password: string, userType: 'driver' | 'passenger') => boolean;
+  login: (username: string, password: string, userType: 'driver' | 'passenger' | 'admin') => boolean;
   register: (userData: Omit<User, 'id' | 'rating' | 'dispatchCash'> & { password: string }) => boolean;
   logout: () => void;
   updateUser: (userData: Partial<User>) => void;
@@ -38,7 +38,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  const login = (username: string, password: string, userType: 'driver' | 'passenger'): boolean => {
+  const login = (username: string, password: string, userType: 'driver' | 'passenger' | 'admin'): boolean => {
     const users = JSON.parse(localStorage.getItem('users') || '[]');
     const foundUser = users.find(
       (u: any) => u.username === username && u.password === password && u.userType === userType
