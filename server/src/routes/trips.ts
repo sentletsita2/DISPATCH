@@ -4,6 +4,7 @@ import { prisma } from "../lib/prisma.js";
 import { authenticate, AuthRequest } from "../middleware/auth.js";
 import { calculateTripPrice, haversineKm } from "../lib/pricing.js";
 import { getIO } from "../socket/io.js";
+import { Prisma } from "@prisma/client";
 
 const router = Router();
 
@@ -110,7 +111,8 @@ router.post("/:id/accept", authenticate, async (req: AuthRequest, res: Response)
     return;
   }
 
-  const trip = await prisma.trip.findUnique({ where: { id: req.params.id } });
+  const tripId = req.params["id"] as string;
+  const trip = await prisma.trip.findUnique({ where: { id: tripId } });
   if (!trip || trip.status !== "REQUESTED") {
     res.status(400).json({ error: "Trip not available" });
     return;
@@ -127,7 +129,7 @@ router.post("/:id/accept", authenticate, async (req: AuthRequest, res: Response)
   }
 
   const updated = await prisma.trip.update({
-    where: { id: req.params.id },
+    where: { id: tripId },
     data: { driverId: req.user!.id, status: "DRIVER_ASSIGNED" },
     include: {
       driver: { select: { fullName: true, avatarUrl: true, rating: true, userId: true } },
@@ -142,14 +144,15 @@ router.post("/:id/accept", authenticate, async (req: AuthRequest, res: Response)
 // ── POST /trips/:id/arrived ───────────────────────────────────────────────────
 
 router.post("/:id/arrived", authenticate, async (req: AuthRequest, res: Response) => {
-  const trip = await prisma.trip.findUnique({ where: { id: req.params.id } });
+  const tripId = req.params["id"] as string;
+  const trip = await prisma.trip.findUnique({ where: { id: tripId } });
   if (!trip || trip.driverId !== req.user!.id || trip.status !== "DRIVER_ASSIGNED") {
     res.status(400).json({ error: "Invalid action" });
     return;
   }
 
   const updated = await prisma.trip.update({
-    where: { id: req.params.id },
+    where: { id: tripId },
     data: { status: "DRIVER_ARRIVED" },
   });
 
@@ -160,14 +163,15 @@ router.post("/:id/arrived", authenticate, async (req: AuthRequest, res: Response
 // ── POST /trips/:id/start ─────────────────────────────────────────────────────
 
 router.post("/:id/start", authenticate, async (req: AuthRequest, res: Response) => {
-  const trip = await prisma.trip.findUnique({ where: { id: req.params.id } });
+  const tripId = req.params["id"] as string;
+  const trip = await prisma.trip.findUnique({ where: { id: tripId } });
   if (!trip || trip.driverId !== req.user!.id || trip.status !== "DRIVER_ARRIVED") {
     res.status(400).json({ error: "Invalid action" });
     return;
   }
 
   const updated = await prisma.trip.update({
-    where: { id: req.params.id },
+    where: { id: tripId },
     data: { status: "IN_PROGRESS", startedAt: new Date() },
   });
 
@@ -178,7 +182,8 @@ router.post("/:id/start", authenticate, async (req: AuthRequest, res: Response) 
 // ── POST /trips/:id/complete ──────────────────────────────────────────────────
 
 router.post("/:id/complete", authenticate, async (req: AuthRequest, res: Response) => {
-  const trip = await prisma.trip.findUnique({ where: { id: req.params.id } });
+  const tripId = req.params["id"] as string;
+  const trip = await prisma.trip.findUnique({ where: { id: tripId } });
   if (!trip || trip.driverId !== req.user!.id || trip.status !== "IN_PROGRESS") {
     res.status(400).json({ error: "Invalid action" });
     return;
@@ -237,7 +242,8 @@ router.post("/:id/complete", authenticate, async (req: AuthRequest, res: Respons
 // ── POST /trips/:id/cancel ────────────────────────────────────────────────────
 
 router.post("/:id/cancel", authenticate, async (req: AuthRequest, res: Response) => {
-  const trip = await prisma.trip.findUnique({ where: { id: req.params.id } });
+  const tripId = req.params["id"] as string;
+  const trip = await prisma.trip.findUnique({ where: { id: tripId } });
   if (!trip) {
     res.status(404).json({ error: "Trip not found" });
     return;
@@ -257,7 +263,8 @@ router.post("/:id/cancel", authenticate, async (req: AuthRequest, res: Response)
 
   const reason = typeof req.body.reason === "string" ? req.body.reason : undefined;
 
-  const cancelOps: Parameters<typeof prisma.$transaction>[0] = [
+  // Build ops array with explicit Prisma type
+  const cancelOps: Prisma.PrismaPromise<unknown>[] = [
     prisma.trip.update({
       where: { id: trip.id },
       data: {
@@ -278,14 +285,28 @@ router.post("/:id/cancel", authenticate, async (req: AuthRequest, res: Response)
         where: { userId: trip.passengerId },
         data: {
           balance: { decrement: partial },
-          transactions: { create: { type: "TRIP_PAYMENT", amount: partial, description: "Partial trip charge (driver cancel)", tripId: trip.id } },
+          transactions: {
+            create: {
+              type: "TRIP_PAYMENT",
+              amount: partial,
+              description: "Partial trip charge (driver cancel)",
+              tripId: trip.id,
+            },
+          },
         },
       }),
       prisma.wallet.update({
         where: { userId: trip.driverId },
         data: {
           balance: { increment: driverPartial },
-          transactions: { create: { type: "TRIP_EARNING", amount: driverPartial, description: "Partial trip earning (cancelled mid-trip)", tripId: trip.id } },
+          transactions: {
+            create: {
+              type: "TRIP_EARNING",
+              amount: driverPartial,
+              description: "Partial trip earning (cancelled mid-trip)",
+              tripId: trip.id,
+            },
+          },
         },
       })
     );
@@ -304,7 +325,8 @@ router.post("/:id/cancel", authenticate, async (req: AuthRequest, res: Response)
 // ── POST /trips/:id/rate ──────────────────────────────────────────────────────
 
 router.post("/:id/rate", authenticate, async (req: AuthRequest, res: Response) => {
-  const trip = await prisma.trip.findUnique({ where: { id: req.params.id } });
+  const tripId = req.params["id"] as string;
+  const trip = await prisma.trip.findUnique({ where: { id: tripId } });
   if (!trip || trip.status !== "COMPLETED") {
     res.status(400).json({ error: "Can only rate completed trips" });
     return;
@@ -364,8 +386,9 @@ router.get("/", authenticate, async (req: AuthRequest, res: Response) => {
 // ── GET /trips/:id ────────────────────────────────────────────────────────────
 
 router.get("/:id", authenticate, async (req: AuthRequest, res: Response) => {
+  const tripId = req.params["id"] as string;
   const trip = await prisma.trip.findUnique({
-    where: { id: req.params.id },
+    where: { id: tripId },
     include: {
       passenger: { select: { fullName: true, avatarUrl: true, rating: true, phone: true } },
       driver: { select: { fullName: true, avatarUrl: true, rating: true, phone: true, driverProfile: true } },
