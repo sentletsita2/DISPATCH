@@ -1,0 +1,10 @@
+[phases.install]
+cmds = []
+
+[phases.build]
+cmds = [
+  "cd server && npm install --legacy-peer-deps && npm run db:generate && npm run build"
+]
+
+[start]
+cmd = "cd server && npm run db:migrate && npm start"
