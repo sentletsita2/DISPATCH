@@ -1,7 +1,7 @@
 import { Router, Response } from "express";
 import { prisma } from "../lib/prisma.js";
 import { authenticate, AuthRequest } from "../middleware/auth.js";
-import { uploadDocument } from "../lib/cloudinary.js";
+import { uploadDocument, toDataUrl } from "../lib/cloudinary.js";
 import { getIO } from "../socket/io.js";
 
 const router = Router();
@@ -98,7 +98,7 @@ router.post(
       return;
     }
 
-    const fileUrl = (req.file as Express.Multer.File & { path: string }).path;
+    const fileUrl = toDataUrl(req.file as Express.Multer.File);
     const profile = await prisma.driverProfile.findUnique({ where: { userId: req.user!.id } });
     if (!profile) {
       res.status(404).json({ error: "Driver profile not found" });
