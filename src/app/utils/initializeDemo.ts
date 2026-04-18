@@ -34,11 +34,48 @@ export const initializeDemoData = () => {
         clockedIn: false,
         documentsVerified: true,
       },
+      {
+        id: 'a202600001',
+        username: 'admin',
+        password: 'admin123',
+        fullName: 'Dispatch Admin',
+        email: 'admin@dispatch.com',
+        phoneNumber: '+263 77 000 0000',
+        dob: '1985-01-01',
+        idNumber: '00-000000A00',
+        userType: 'admin',
+        rating: 5.0,
+        dispatchCash: 0,
+        clockedIn: false,
+        documentsVerified: true,
+      },
     ];
     
     localStorage.setItem('users', JSON.stringify(demoUsers));
-    console.log('Demo users initialized! Use these credentials:');
+    console.log('Demo users initialized!');
     console.log('Passenger - Username: passenger1, Password: password');
-    console.log('Driver - Username: driver1, Password: password');
+    console.log('Driver    - Username: driver1, Password: password');
+    console.log('Admin     - Username: admin, Password: admin123');
+  } else {
+    // Ensure admin exists even if users were already seeded
+    const users = JSON.parse(existingUsers);
+    if (!users.find((u: any) => u.userType === 'admin')) {
+      users.push({
+        id: 'a202600001',
+        username: 'admin',
+        password: 'admin123',
+        fullName: 'Dispatch Admin',
+        email: 'admin@dispatch.com',
+        phoneNumber: '+263 77 000 0000',
+        dob: '1985-01-01',
+        idNumber: '00-000000A00',
+        userType: 'admin',
+        rating: 5.0,
+        dispatchCash: 0,
+        clockedIn: false,
+        documentsVerified: true,
+      });
+      localStorage.setItem('users', JSON.stringify(users));
+    }
   }
 };
