@@ -22,7 +22,6 @@ router.post("/clock", authenticate, async (req: AuthRequest, res: Response) => {
     return;
   }
 
-  // Cannot clock in unless all 3 documents are VERIFIED
   if (!profile.isClockedIn) {
     const verifiedDocs = await prisma.driverDocument.count({
       where: { driverProfileId: profile.id, status: "VERIFIED" },
@@ -45,7 +44,6 @@ router.post("/clock", authenticate, async (req: AuthRequest, res: Response) => {
 });
 
 // ── PUT /drivers/location ─────────────────────────────────────────────────────
-// Driver pushes their GPS position (called every few seconds from the app)
 
 router.put("/location", authenticate, async (req: AuthRequest, res: Response) => {
   if (req.user!.role !== "DRIVER") {
@@ -64,14 +62,12 @@ router.put("/location", authenticate, async (req: AuthRequest, res: Response) =>
     data: { currentLat: lat, currentLng: lng },
   });
 
-  // If in an active trip, record location snapshot and broadcast to passenger
-  if (tripId) {
+  if (typeof tripId === "string") {
     const trip = await prisma.trip.findUnique({ where: { id: tripId } });
     if (trip && trip.driverId === req.user!.id && trip.status === "IN_PROGRESS") {
       await prisma.tripLocation.create({ data: { tripId, lat, lng } });
       getIO().to(`trip:${tripId}`).emit("driver:location", { lat, lng });
     } else if (trip && trip.driverId === req.user!.id && trip.status === "DRIVER_ASSIGNED") {
-      // Driver en route to pickup — push to passenger too
       getIO().to(`trip:${tripId}`).emit("driver:location", { lat, lng });
     }
   }
@@ -91,7 +87,7 @@ router.post(
       return;
     }
 
-    const docType = req.params.docType.toUpperCase();
+    const docType = (req.params.docType as string).toUpperCase();
     if (!DOC_TYPES.includes(docType as (typeof DOC_TYPES)[number])) {
       res.status(400).json({ error: `docType must be one of ${DOC_TYPES.join(", ")}` });
       return;
