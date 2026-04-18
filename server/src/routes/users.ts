@@ -54,8 +54,9 @@ router.post(
 // ── GET /users/:id/reviews ────────────────────────────────────────────────────
 
 router.get("/:id/reviews", authenticate, async (req: AuthRequest, res: Response) => {
+  const receiverId = req.params.id as string;
   const ratings = await prisma.rating.findMany({
-    where: { receiverId: req.params.id },
+    where: { receiverId },
     include: { giver: { select: { fullName: true, avatarUrl: true } } },
     orderBy: { createdAt: "desc" },
     take: 20,
@@ -63,7 +64,7 @@ router.get("/:id/reviews", authenticate, async (req: AuthRequest, res: Response)
   res.json(ratings);
 });
 
-// ── GET /users/:id/stats ──────────────────────────────────────────────────────
+// ── GET /users/stats ──────────────────────────────────────────────────────────
 
 router.get("/stats", authenticate, async (req: AuthRequest, res: Response) => {
   const uid = req.user!.id;
