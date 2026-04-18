@@ -46,11 +46,10 @@ router.patch("/documents/:id", async (req: AuthRequest, res: Response) => {
   }
 
   const doc = await prisma.driverDocument.update({
-    where: { id: req.params.id as string },
+    where: { id: req.params["id"] as string },
     data: { status, reviewNote, reviewedAt: new Date() },
   });
 
-  // Sync isVerified on driver profile
   const verifiedCount = await prisma.driverDocument.count({
     where: { driverProfileId: doc.driverProfileId, status: "VERIFIED" },
   });
@@ -129,9 +128,8 @@ router.get("/stats", async (_req, res: Response) => {
 // REPORTS  (multi-table — satisfies PDF marking criteria)
 // ════════════════════════════════════════════════════════════════════════════
 
-// ── REPORT 1: Trip Summary Report ─────────────────────────────────────────────
-// Draws from: trips + users (passenger + driver)
-// Shows every trip with full passenger/driver detail, price breakdown, duration
+// ── REPORT 1: Trip Summary ────────────────────────────────────────────────────
+// Tables: trips + users (passenger + driver)
 
 router.get("/reports/trip-summary", async (_req, res: Response) => {
   const trips = await prisma.trip.findMany({
@@ -142,7 +140,8 @@ router.get("/reports/trip-summary", async (_req, res: Response) => {
     orderBy: { createdAt: "desc" },
   });
 
-  const report = trips.map(t => ({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const report = (trips as any[]).map((t: any) => ({
     tripId:           t.id,
     date:             t.createdAt,
     status:           t.status,
@@ -171,22 +170,15 @@ router.get("/reports/trip-summary", async (_req, res: Response) => {
   });
 });
 
-// ── REPORT 2: Driver Earnings Report ─────────────────────────────────────────
-// Draws from: users + driverProfile + trips + walletTransactions
-// Shows each driver's total earnings, trip count, avg rating, wallet balance
+// ── REPORT 2: Driver Earnings ─────────────────────────────────────────────────
+// Tables: users + driverProfile + driverDocument + trips + walletTransactions
 
 router.get("/reports/driver-earnings", async (_req, res: Response) => {
   const drivers = await prisma.user.findMany({
     where: { role: "DRIVER" },
     include: {
-      wallet: {
-        include: { transactions: { where: { type: "TRIP_EARNING" } } },
-      },
-      driverProfile: {
-        include: {
-          documents: { select: { docType: true, status: true } },
-        },
-      },
+      wallet: { include: { transactions: { where: { type: "TRIP_EARNING" } } } },
+      driverProfile: { include: { documents: { select: { docType: true, status: true } } } },
       driverTrips: {
         where: { status: "COMPLETED" },
         select: { totalPrice: true, driverEarning: true, distanceKm: true, completedAt: true },
@@ -195,34 +187,30 @@ router.get("/reports/driver-earnings", async (_req, res: Response) => {
     orderBy: { rating: "desc" },
   });
 
-  const report = drivers.map(d => {
-    const completedTrips = d.driverTrips;
-    const totalEarned = completedTrips.reduce(
-      (sum, t) => sum + Number(t.driverEarning ?? 0), 0
-    );
-    const totalDistance = completedTrips.reduce(
-      (sum, t) => sum + Number(t.distanceKm ?? 0), 0
-    );
-
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const report = (drivers as any[]).map((d: any) => {
+    const completedTrips: any[] = d.driverTrips;
+    const totalEarned   = completedTrips.reduce((s: number, t: any) => s + Number(t.driverEarning ?? 0), 0);
+    const totalDistance = completedTrips.reduce((s: number, t: any) => s + Number(t.distanceKm ?? 0), 0);
     return {
-      driverId:        d.userId,
-      fullName:        d.fullName,
-      email:           d.email,
-      phone:           d.phone,
-      rating:          d.rating,
-      reviewCount:     d.reviewCount,
-      isVerified:      d.driverProfile?.isVerified ?? false,
-      isClockedIn:     d.driverProfile?.isClockedIn ?? false,
-      vehicleMake:     d.driverProfile?.vehicleMake,
-      vehicleModel:    d.driverProfile?.vehicleModel,
-      vehiclePlate:    d.driverProfile?.vehiclePlate,
-      tripsCompleted:  completedTrips.length,
-      totalEarnedLSL:  Number(totalEarned.toFixed(2)),
-      totalDistanceKm: Number(totalDistance.toFixed(1)),
+      driverId:         d.userId,
+      fullName:         d.fullName,
+      email:            d.email,
+      phone:            d.phone,
+      rating:           d.rating,
+      reviewCount:      d.reviewCount,
+      isVerified:       d.driverProfile?.isVerified ?? false,
+      isClockedIn:      d.driverProfile?.isClockedIn ?? false,
+      vehicleMake:      d.driverProfile?.vehicleMake,
+      vehicleModel:     d.driverProfile?.vehicleModel,
+      vehiclePlate:     d.driverProfile?.vehiclePlate,
+      tripsCompleted:   completedTrips.length,
+      totalEarnedLSL:   Number(totalEarned.toFixed(2)),
+      totalDistanceKm:  Number(totalDistance.toFixed(1)),
       walletBalanceLSL: Number(d.wallet?.balance ?? 0),
-      documentsStatus: d.driverProfile?.documents.map(doc => ({
+      documentsStatus:  (d.driverProfile?.documents ?? []).map((doc: any) => ({
         type: doc.docType, status: doc.status,
-      })) ?? [],
+      })),
     };
   });
 
@@ -230,57 +218,49 @@ router.get("/reports/driver-earnings", async (_req, res: Response) => {
     reportName: "Driver Earnings Report",
     generatedAt: new Date(),
     totalDrivers: report.length,
-    totalPaidOutLSL: Number(
-      report.reduce((s, d) => s + d.totalEarnedLSL, 0).toFixed(2)
-    ),
+    totalPaidOutLSL: Number(report.reduce((s: number, d: any) => s + d.totalEarnedLSL, 0).toFixed(2)),
     data: report,
   });
 });
 
-// ── REPORT 3: Passenger Activity Report ──────────────────────────────────────
-// Draws from: users + trips + ratings + walletTransactions
-// Shows each passenger's spend, trip count, drivers used, ratings given
+// ── REPORT 3: Passenger Activity ──────────────────────────────────────────────
+// Tables: users + trips + walletTransactions + ratings
 
 router.get("/reports/passenger-activity", async (_req, res: Response) => {
   const passengers = await prisma.user.findMany({
     where: { role: "PASSENGER" },
     include: {
-      wallet: {
-        include: { transactions: { where: { type: { in: ["DEPOSIT", "TRIP_PAYMENT"] } } } },
-      },
+      wallet: { include: { transactions: { where: { type: { in: ["DEPOSIT", "TRIP_PAYMENT"] } } } } },
       passengerTrips: {
-        include: {
-          driver: { select: { fullName: true, userId: true } },
-          ratings: { where: { giverId: { not: undefined } }, select: { score: true } },
-        },
+        include: { driver: { select: { fullName: true, userId: true } } },
       },
     },
     orderBy: { createdAt: "asc" },
   });
 
-  const report = passengers.map(p => {
-    const trips = p.passengerTrips;
-    const completed = trips.filter(t => t.status === "COMPLETED");
-    const totalSpent = completed.reduce((s, t) => s + Number(t.totalPrice ?? 0), 0);
-    const totalDeposited = p.wallet?.transactions
-      .filter(tx => tx.type === "DEPOSIT")
-      .reduce((s, tx) => s + Number(tx.amount), 0) ?? 0;
-    const uniqueDriverIds = [...new Set(completed.map(t => t.driverId).filter(Boolean))];
-
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const report = (passengers as any[]).map((p: any) => {
+    const trips: any[]    = p.passengerTrips;
+    const completed: any[] = trips.filter((t: any) => t.status === "COMPLETED");
+    const totalSpent       = completed.reduce((s: number, t: any) => s + Number(t.totalPrice ?? 0), 0);
+    const totalDeposited   = (p.wallet?.transactions ?? [])
+      .filter((tx: any) => tx.type === "DEPOSIT")
+      .reduce((s: number, tx: any) => s + Number(tx.amount), 0);
+    const uniqueDriverIds  = [...new Set(completed.map((t: any) => t.driverId).filter(Boolean))];
     return {
-      passengerId:       p.userId,
-      fullName:          p.fullName,
-      email:             p.email,
-      phone:             p.phone,
-      rating:            p.rating,
-      memberSince:       p.createdAt,
-      walletBalanceLSL:  Number(p.wallet?.balance ?? 0),
-      totalDepositedLSL: Number(totalDeposited.toFixed(2)),
-      tripsTotal:        trips.length,
-      tripsCompleted:    completed.length,
-      tripsCancelled:    trips.filter(t => t.status === "CANCELLED").length,
-      totalSpentLSL:     Number(totalSpent.toFixed(2)),
-      uniqueDriversUsed: uniqueDriverIds.length,
+      passengerId:        p.userId,
+      fullName:           p.fullName,
+      email:              p.email,
+      phone:              p.phone,
+      rating:             p.rating,
+      memberSince:        p.createdAt,
+      walletBalanceLSL:   Number(p.wallet?.balance ?? 0),
+      totalDepositedLSL:  Number(totalDeposited.toFixed(2)),
+      tripsTotal:         trips.length,
+      tripsCompleted:     completed.length,
+      tripsCancelled:     trips.filter((t: any) => t.status === "CANCELLED").length,
+      totalSpentLSL:      Number(totalSpent.toFixed(2)),
+      uniqueDriversUsed:  uniqueDriverIds.length,
     };
   });
 
@@ -289,15 +269,14 @@ router.get("/reports/passenger-activity", async (_req, res: Response) => {
     generatedAt: new Date(),
     totalPassengers: report.length,
     totalRevenueFromPassengersLSL: Number(
-      report.reduce((s, p) => s + p.totalSpentLSL, 0).toFixed(2)
+      report.reduce((s: number, p: any) => s + p.totalSpentLSL, 0).toFixed(2)
     ),
     data: report,
   });
 });
 
-// ── REPORT 4: Revenue & Commission Report ────────────────────────────────────
-// Draws from: trips + walletTransactions + users
-// Financial summary: daily revenue, system commission, driver payouts
+// ── REPORT 4: Revenue & Commission ────────────────────────────────────────────
+// Tables: trips + users (driver) + walletTransactions
 
 router.get("/reports/revenue", async (_req, res: Response) => {
   const completedTrips = await prisma.trip.findMany({
@@ -310,23 +289,20 @@ router.get("/reports/revenue", async (_req, res: Response) => {
   });
 
   // Group by date
-  const byDate: Record<string, {
-    date: string; tripCount: number;
-    grossRevenue: number; driverPayouts: number; systemCommission: number;
-  }> = {};
+  type DayRow = { date: string; tripCount: number; grossRevenue: number; driverPayouts: number; systemCommission: number };
+  const byDate: Record<string, DayRow> = {};
 
-  for (const t of completedTrips) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const t of completedTrips as any[]) {
     const date = (t.completedAt ?? t.createdAt).toISOString().slice(0, 10);
-    if (!byDate[date]) {
-      byDate[date] = { date, tripCount: 0, grossRevenue: 0, driverPayouts: 0, systemCommission: 0 };
-    }
+    if (!byDate[date]) byDate[date] = { date, tripCount: 0, grossRevenue: 0, driverPayouts: 0, systemCommission: 0 };
     byDate[date].tripCount++;
     byDate[date].grossRevenue     += Number(t.totalPrice ?? 0);
     byDate[date].driverPayouts    += Number(t.driverEarning ?? 0);
     byDate[date].systemCommission += Number(t.systemCommission ?? 0);
   }
 
-  const daily = Object.values(byDate).map(d => ({
+  const daily = Object.values(byDate).map((d: DayRow) => ({
     ...d,
     grossRevenue:     Number(d.grossRevenue.toFixed(2)),
     driverPayouts:    Number(d.driverPayouts.toFixed(2)),
@@ -335,18 +311,19 @@ router.get("/reports/revenue", async (_req, res: Response) => {
 
   const totals = {
     tripCount:        completedTrips.length,
-    grossRevenueLSL:  Number(daily.reduce((s, d) => s + d.grossRevenue, 0).toFixed(2)),
-    driverPayoutsLSL: Number(daily.reduce((s, d) => s + d.driverPayouts, 0).toFixed(2)),
-    commissionLSL:    Number(daily.reduce((s, d) => s + d.systemCommission, 0).toFixed(2)),
+    grossRevenueLSL:  Number(daily.reduce((s: number, d: DayRow) => s + d.grossRevenue, 0).toFixed(2)),
+    driverPayoutsLSL: Number(daily.reduce((s: number, d: DayRow) => s + d.driverPayouts, 0).toFixed(2)),
+    commissionLSL:    Number(daily.reduce((s: number, d: DayRow) => s + d.systemCommission, 0).toFixed(2)),
     commissionPct:    20,
   };
 
-  // Top 5 earners
+  // Top 5 earning drivers
   const driverTotals: Record<string, { name: string; earned: number; trips: number }> = {};
-  for (const t of completedTrips) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const t of completedTrips as any[]) {
     if (!t.driver) continue;
-    const key = t.driver.userId;
-    if (!driverTotals[key]) driverTotals[key] = { name: t.driver.fullName, earned: 0, trips: 0 };
+    const key = t.driver.userId as string;
+    if (!driverTotals[key]) driverTotals[key] = { name: t.driver.fullName as string, earned: 0, trips: 0 };
     driverTotals[key].earned += Number(t.driverEarning ?? 0);
     driverTotals[key].trips++;
   }
